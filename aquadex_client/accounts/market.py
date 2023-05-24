@@ -1,7 +1,6 @@
 import typing
 from dataclasses import dataclass
-from base64 import b64decode
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
 import borsh_construct as borsh
@@ -83,44 +82,46 @@ class Market:
     log_reimburse: int
     taker_fee: int
     maker_rebate: int
-    state: PublicKey
-    trade_log: PublicKey
-    agent: PublicKey
+    state: Pubkey
+    trade_log: Pubkey
+    agent: Pubkey
     agent_nonce: int
-    manager: PublicKey
-    mkt_mint: PublicKey
-    mkt_vault: PublicKey
+    manager: Pubkey
+    mkt_mint: Pubkey
+    mkt_vault: Pubkey
     mkt_decimals: int
     mkt_mint_type: int
-    prc_mint: PublicKey
-    prc_vault: PublicKey
+    prc_mint: Pubkey
+    prc_vault: Pubkey
     prc_decimals: int
     prc_mint_type: int
-    orders: PublicKey
-    settle0: PublicKey
+    orders: Pubkey
+    settle0: Pubkey
 
     @classmethod
     async def fetch(
         cls,
         conn: AsyncClient,
-        address: PublicKey,
+        address: Pubkey,
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.Optional["Market"]:
         resp = await conn.get_account_info(address, commitment=commitment)
-        info = resp["result"]["value"]
+        info = resp.value
         if info is None:
             return None
-        if info["owner"] != str(PROGRAM_ID):
+        if info.owner != program_id:
             raise ValueError("Account does not belong to this program")
-        bytes_data = b64decode(info["data"][0])
+        bytes_data = info.data
         return cls.decode(bytes_data)
 
     @classmethod
     async def fetch_multiple(
         cls,
         conn: AsyncClient,
-        addresses: list[PublicKey],
+        addresses: list[Pubkey],
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.List[typing.Optional["Market"]]:
         infos = await get_multiple_accounts(conn, addresses, commitment=commitment)
         res: typing.List[typing.Optional["Market"]] = []
@@ -128,7 +129,7 @@ class Market:
             if info is None:
                 res.append(None)
                 continue
-            if info.account.owner != PROGRAM_ID:
+            if info.account.owner != program_id:
                 raise ValueError("Account does not belong to this program")
             res.append(cls.decode(info.account.data))
         return res
@@ -213,19 +214,19 @@ class Market:
             log_reimburse=obj["log_reimburse"],
             taker_fee=obj["taker_fee"],
             maker_rebate=obj["maker_rebate"],
-            state=PublicKey(obj["state"]),
-            trade_log=PublicKey(obj["trade_log"]),
-            agent=PublicKey(obj["agent"]),
+            state=Pubkey.from_string(obj["state"]),
+            trade_log=Pubkey.from_string(obj["trade_log"]),
+            agent=Pubkey.from_string(obj["agent"]),
             agent_nonce=obj["agent_nonce"],
-            manager=PublicKey(obj["manager"]),
-            mkt_mint=PublicKey(obj["mkt_mint"]),
-            mkt_vault=PublicKey(obj["mkt_vault"]),
+            manager=Pubkey.from_string(obj["manager"]),
+            mkt_mint=Pubkey.from_string(obj["mkt_mint"]),
+            mkt_vault=Pubkey.from_string(obj["mkt_vault"]),
             mkt_decimals=obj["mkt_decimals"],
             mkt_mint_type=obj["mkt_mint_type"],
-            prc_mint=PublicKey(obj["prc_mint"]),
-            prc_vault=PublicKey(obj["prc_vault"]),
+            prc_mint=Pubkey.from_string(obj["prc_mint"]),
+            prc_vault=Pubkey.from_string(obj["prc_vault"]),
             prc_decimals=obj["prc_decimals"],
             prc_mint_type=obj["prc_mint_type"],
-            orders=PublicKey(obj["orders"]),
-            settle0=PublicKey(obj["settle0"]),
+            orders=Pubkey.from_string(obj["orders"]),
+            settle0=Pubkey.from_string(obj["settle0"]),
         )

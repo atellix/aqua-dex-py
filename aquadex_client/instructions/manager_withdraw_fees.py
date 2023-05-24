@@ -1,26 +1,28 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
 from ..program_id import PROGRAM_ID
 
 
 class ManagerWithdrawFeesAccounts(typing.TypedDict):
-    root_data: PublicKey
-    auth_data: PublicKey
-    market: PublicKey
-    state: PublicKey
-    agent: PublicKey
-    admin: PublicKey
-    manager: PublicKey
-    manager_prc_token: PublicKey
-    prc_vault: PublicKey
-    spl_token_prog: PublicKey
+    root_data: Pubkey
+    auth_data: Pubkey
+    market: Pubkey
+    state: Pubkey
+    agent: Pubkey
+    admin: Pubkey
+    manager: Pubkey
+    manager_prc_token: Pubkey
+    prc_vault: Pubkey
+    spl_token_prog: Pubkey
 
 
 def manager_withdraw_fees(
     accounts: ManagerWithdrawFeesAccounts,
-) -> TransactionInstruction:
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["root_data"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["auth_data"], is_signer=False, is_writable=False),
@@ -37,7 +39,9 @@ def manager_withdraw_fees(
             pubkey=accounts["spl_token_prog"], is_signer=False, is_writable=False
         ),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"\xf3\x92\x807\xdc.z)"
     encoded_args = b""
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

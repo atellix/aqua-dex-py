@@ -1,7 +1,6 @@
 import typing
 from dataclasses import dataclass
-from base64 import b64decode
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
 import borsh_construct as borsh
@@ -58,8 +57,8 @@ class MarketState:
         "last_ts" / borsh.I64,
         "last_price" / borsh.U64,
     )
-    settle_a: PublicKey
-    settle_b: PublicKey
+    settle_a: Pubkey
+    settle_b: Pubkey
     log_rollover: bool
     log_deposit_balance: int
     action_counter: int
@@ -82,24 +81,26 @@ class MarketState:
     async def fetch(
         cls,
         conn: AsyncClient,
-        address: PublicKey,
+        address: Pubkey,
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.Optional["MarketState"]:
         resp = await conn.get_account_info(address, commitment=commitment)
-        info = resp["result"]["value"]
+        info = resp.value
         if info is None:
             return None
-        if info["owner"] != str(PROGRAM_ID):
+        if info.owner != program_id:
             raise ValueError("Account does not belong to this program")
-        bytes_data = b64decode(info["data"][0])
+        bytes_data = info.data
         return cls.decode(bytes_data)
 
     @classmethod
     async def fetch_multiple(
         cls,
         conn: AsyncClient,
-        addresses: list[PublicKey],
+        addresses: list[Pubkey],
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.List[typing.Optional["MarketState"]]:
         infos = await get_multiple_accounts(conn, addresses, commitment=commitment)
         res: typing.List[typing.Optional["MarketState"]] = []
@@ -107,7 +108,7 @@ class MarketState:
             if info is None:
                 res.append(None)
                 continue
-            if info.account.owner != PROGRAM_ID:
+            if info.account.owner != program_id:
                 raise ValueError("Account does not belong to this program")
             res.append(cls.decode(info.account.data))
         return res
@@ -167,8 +168,8 @@ class MarketState:
     @classmethod
     def from_json(cls, obj: MarketStateJSON) -> "MarketState":
         return cls(
-            settle_a=PublicKey(obj["settle_a"]),
-            settle_b=PublicKey(obj["settle_b"]),
+            settle_a=Pubkey.from_string(obj["settle_a"]),
+            settle_b=Pubkey.from_string(obj["settle_b"]),
             log_rollover=obj["log_rollover"],
             log_deposit_balance=obj["log_deposit_balance"],
             action_counter=obj["action_counter"],

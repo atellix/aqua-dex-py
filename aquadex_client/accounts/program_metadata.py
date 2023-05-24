@@ -1,7 +1,6 @@
 import typing
 from dataclasses import dataclass
-from base64 import b64decode
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
 import borsh_construct as borsh
@@ -41,7 +40,7 @@ class ProgramMetadata:
     semvar_major: int
     semvar_minor: int
     semvar_patch: int
-    program: PublicKey
+    program: Pubkey
     program_name: str
     developer_name: str
     developer_url: str
@@ -52,24 +51,26 @@ class ProgramMetadata:
     async def fetch(
         cls,
         conn: AsyncClient,
-        address: PublicKey,
+        address: Pubkey,
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.Optional["ProgramMetadata"]:
         resp = await conn.get_account_info(address, commitment=commitment)
-        info = resp["result"]["value"]
+        info = resp.value
         if info is None:
             return None
-        if info["owner"] != str(PROGRAM_ID):
+        if info.owner != program_id:
             raise ValueError("Account does not belong to this program")
-        bytes_data = b64decode(info["data"][0])
+        bytes_data = info.data
         return cls.decode(bytes_data)
 
     @classmethod
     async def fetch_multiple(
         cls,
         conn: AsyncClient,
-        addresses: list[PublicKey],
+        addresses: list[Pubkey],
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.List[typing.Optional["ProgramMetadata"]]:
         infos = await get_multiple_accounts(conn, addresses, commitment=commitment)
         res: typing.List[typing.Optional["ProgramMetadata"]] = []
@@ -77,7 +78,7 @@ class ProgramMetadata:
             if info is None:
                 res.append(None)
                 continue
-            if info.account.owner != PROGRAM_ID:
+            if info.account.owner != program_id:
                 raise ValueError("Account does not belong to this program")
             res.append(cls.decode(info.account.data))
         return res
@@ -120,7 +121,7 @@ class ProgramMetadata:
             semvar_major=obj["semvar_major"],
             semvar_minor=obj["semvar_minor"],
             semvar_patch=obj["semvar_patch"],
-            program=PublicKey(obj["program"]),
+            program=Pubkey.from_string(obj["program"]),
             program_name=obj["program_name"],
             developer_name=obj["developer_name"],
             developer_url=obj["developer_url"],

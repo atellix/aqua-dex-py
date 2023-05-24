@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
 import borsh_construct as borsh
 from ..program_id import PROGRAM_ID
 
@@ -28,23 +28,28 @@ layout = borsh.CStruct(
 
 
 class LimitAskAccounts(typing.TypedDict):
-    market: PublicKey
-    state: PublicKey
-    agent: PublicKey
-    user: PublicKey
-    user_mkt_token: PublicKey
-    user_prc_token: PublicKey
-    mkt_vault: PublicKey
-    prc_vault: PublicKey
-    orders: PublicKey
-    trade_log: PublicKey
-    settle_a: PublicKey
-    settle_b: PublicKey
-    result: PublicKey
-    spl_token_prog: PublicKey
+    market: Pubkey
+    state: Pubkey
+    agent: Pubkey
+    user: Pubkey
+    user_mkt_token: Pubkey
+    user_prc_token: Pubkey
+    mkt_vault: Pubkey
+    prc_vault: Pubkey
+    orders: Pubkey
+    trade_log: Pubkey
+    settle_a: Pubkey
+    settle_b: Pubkey
+    result: Pubkey
+    spl_token_prog: Pubkey
 
 
-def limit_ask(args: LimitAskArgs, accounts: LimitAskAccounts) -> TransactionInstruction:
+def limit_ask(
+    args: LimitAskArgs,
+    accounts: LimitAskAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["market"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["state"], is_signer=False, is_writable=True),
@@ -67,6 +72,8 @@ def limit_ask(args: LimitAskArgs, accounts: LimitAskAccounts) -> TransactionInst
             pubkey=accounts["spl_token_prog"], is_signer=False, is_writable=False
         ),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b";\xf5<@\x0eS\xe9\xa4"
     encoded_args = layout.build(
         {
@@ -80,4 +87,4 @@ def limit_ask(args: LimitAskArgs, accounts: LimitAskAccounts) -> TransactionInst
         }
     )
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

@@ -1,7 +1,6 @@
 import typing
 from dataclasses import dataclass
-from base64 import b64decode
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
 import borsh_construct as borsh
@@ -23,31 +22,33 @@ class MarketAdmin:
     layout: typing.ClassVar = borsh.CStruct(
         "fee_manager" / BorshPubkey, "vault_manager" / BorshPubkey
     )
-    fee_manager: PublicKey
-    vault_manager: PublicKey
+    fee_manager: Pubkey
+    vault_manager: Pubkey
 
     @classmethod
     async def fetch(
         cls,
         conn: AsyncClient,
-        address: PublicKey,
+        address: Pubkey,
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.Optional["MarketAdmin"]:
         resp = await conn.get_account_info(address, commitment=commitment)
-        info = resp["result"]["value"]
+        info = resp.value
         if info is None:
             return None
-        if info["owner"] != str(PROGRAM_ID):
+        if info.owner != program_id:
             raise ValueError("Account does not belong to this program")
-        bytes_data = b64decode(info["data"][0])
+        bytes_data = info.data
         return cls.decode(bytes_data)
 
     @classmethod
     async def fetch_multiple(
         cls,
         conn: AsyncClient,
-        addresses: list[PublicKey],
+        addresses: list[Pubkey],
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.List[typing.Optional["MarketAdmin"]]:
         infos = await get_multiple_accounts(conn, addresses, commitment=commitment)
         res: typing.List[typing.Optional["MarketAdmin"]] = []
@@ -55,7 +56,7 @@ class MarketAdmin:
             if info is None:
                 res.append(None)
                 continue
-            if info.account.owner != PROGRAM_ID:
+            if info.account.owner != program_id:
                 raise ValueError("Account does not belong to this program")
             res.append(cls.decode(info.account.data))
         return res
@@ -81,6 +82,6 @@ class MarketAdmin:
     @classmethod
     def from_json(cls, obj: MarketAdminJSON) -> "MarketAdmin":
         return cls(
-            fee_manager=PublicKey(obj["fee_manager"]),
-            vault_manager=PublicKey(obj["vault_manager"]),
+            fee_manager=Pubkey.from_string(obj["fee_manager"]),
+            vault_manager=Pubkey.from_string(obj["vault_manager"]),
         )

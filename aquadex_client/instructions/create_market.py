@@ -1,7 +1,8 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.system_program import ID as SYS_PROGRAM_ID
+from solders.instruction import Instruction, AccountMeta
 import borsh_construct as borsh
 from ..program_id import PROGRAM_ID
 
@@ -52,30 +53,32 @@ layout = borsh.CStruct(
 
 
 class CreateMarketAccounts(typing.TypedDict):
-    market: PublicKey
-    state: PublicKey
-    admin: PublicKey
-    agent: PublicKey
-    manager: PublicKey
-    fee_manager: PublicKey
-    vault_manager: PublicKey
-    mkt_mint: PublicKey
-    mkt_vault: PublicKey
-    prc_mint: PublicKey
-    prc_vault: PublicKey
-    trade_log: PublicKey
-    orders: PublicKey
-    settle_a: PublicKey
-    settle_b: PublicKey
-    spl_token_prog: PublicKey
-    asc_token_prog: PublicKey
-    system_program: PublicKey
-    system_rent: PublicKey
+    market: Pubkey
+    state: Pubkey
+    admin: Pubkey
+    agent: Pubkey
+    manager: Pubkey
+    fee_manager: Pubkey
+    vault_manager: Pubkey
+    mkt_mint: Pubkey
+    mkt_vault: Pubkey
+    prc_mint: Pubkey
+    prc_vault: Pubkey
+    trade_log: Pubkey
+    orders: Pubkey
+    settle_a: Pubkey
+    settle_b: Pubkey
+    spl_token_prog: Pubkey
+    asc_token_prog: Pubkey
+    system_rent: Pubkey
 
 
 def create_market(
-    args: CreateMarketArgs, accounts: CreateMarketAccounts
-) -> TransactionInstruction:
+    args: CreateMarketArgs,
+    accounts: CreateMarketAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["market"], is_signer=False, is_writable=True),
         AccountMeta(pubkey=accounts["state"], is_signer=False, is_writable=True),
@@ -100,11 +103,11 @@ def create_market(
         AccountMeta(
             pubkey=accounts["asc_token_prog"], is_signer=False, is_writable=False
         ),
-        AccountMeta(
-            pubkey=accounts["system_program"], is_signer=False, is_writable=False
-        ),
+        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["system_rent"], is_signer=False, is_writable=False),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"g\xe2a\xeb\xc8\xbc\xfb\xfe"
     encoded_args = layout.build(
         {
@@ -130,4 +133,4 @@ def create_market(
         }
     )
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

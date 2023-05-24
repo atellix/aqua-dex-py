@@ -1,23 +1,27 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
 from ..program_id import PROGRAM_ID
 
 
 class CloseWithdrawResultAccounts(typing.TypedDict):
-    fee_receiver: PublicKey
-    result: PublicKey
+    fee_receiver: Pubkey
+    result: Pubkey
 
 
 def close_withdraw_result(
     accounts: CloseWithdrawResultAccounts,
-) -> TransactionInstruction:
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["fee_receiver"], is_signer=False, is_writable=True),
         AccountMeta(pubkey=accounts["result"], is_signer=True, is_writable=True),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"\x94\x11aM^e\xbap"
     encoded_args = b""
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

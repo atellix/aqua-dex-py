@@ -1,7 +1,6 @@
 import typing
 from dataclasses import dataclass
-from base64 import b64decode
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
 import borsh_construct as borsh
@@ -20,30 +19,32 @@ class RootDataJSON(typing.TypedDict):
 class RootData:
     discriminator: typing.ClassVar = b"n\xbf_UI~Z\x8c"
     layout: typing.ClassVar = borsh.CStruct("root_authority" / BorshPubkey)
-    root_authority: PublicKey
+    root_authority: Pubkey
 
     @classmethod
     async def fetch(
         cls,
         conn: AsyncClient,
-        address: PublicKey,
+        address: Pubkey,
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.Optional["RootData"]:
         resp = await conn.get_account_info(address, commitment=commitment)
-        info = resp["result"]["value"]
+        info = resp.value
         if info is None:
             return None
-        if info["owner"] != str(PROGRAM_ID):
+        if info.owner != program_id:
             raise ValueError("Account does not belong to this program")
-        bytes_data = b64decode(info["data"][0])
+        bytes_data = info.data
         return cls.decode(bytes_data)
 
     @classmethod
     async def fetch_multiple(
         cls,
         conn: AsyncClient,
-        addresses: list[PublicKey],
+        addresses: list[Pubkey],
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.List[typing.Optional["RootData"]]:
         infos = await get_multiple_accounts(conn, addresses, commitment=commitment)
         res: typing.List[typing.Optional["RootData"]] = []
@@ -51,7 +52,7 @@ class RootData:
             if info is None:
                 res.append(None)
                 continue
-            if info.account.owner != PROGRAM_ID:
+            if info.account.owner != program_id:
                 raise ValueError("Account does not belong to this program")
             res.append(cls.decode(info.account.data))
         return res
@@ -75,5 +76,5 @@ class RootData:
     @classmethod
     def from_json(cls, obj: RootDataJSON) -> "RootData":
         return cls(
-            root_authority=PublicKey(obj["root_authority"]),
+            root_authority=Pubkey.from_string(obj["root_authority"]),
         )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
 import borsh_construct as borsh
 from ..program_id import PROGRAM_ID
 
@@ -15,22 +15,25 @@ layout = borsh.CStruct("inp_side" / borsh.U8, "inp_order_id" / borsh.U128)
 
 
 class CancelOrderAccounts(typing.TypedDict):
-    market: PublicKey
-    state: PublicKey
-    agent: PublicKey
-    owner: PublicKey
-    user_mkt_token: PublicKey
-    user_prc_token: PublicKey
-    mkt_vault: PublicKey
-    prc_vault: PublicKey
-    orders: PublicKey
-    result: PublicKey
-    spl_token_prog: PublicKey
+    market: Pubkey
+    state: Pubkey
+    agent: Pubkey
+    owner: Pubkey
+    user_mkt_token: Pubkey
+    user_prc_token: Pubkey
+    mkt_vault: Pubkey
+    prc_vault: Pubkey
+    orders: Pubkey
+    result: Pubkey
+    spl_token_prog: Pubkey
 
 
 def cancel_order(
-    args: CancelOrderArgs, accounts: CancelOrderAccounts
-) -> TransactionInstruction:
+    args: CancelOrderArgs,
+    accounts: CancelOrderAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["market"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["state"], is_signer=False, is_writable=True),
@@ -50,6 +53,8 @@ def cancel_order(
             pubkey=accounts["spl_token_prog"], is_signer=False, is_writable=False
         ),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"_\x81\xed\xf0\x081\xdf\x84"
     encoded_args = layout.build(
         {
@@ -58,4 +63,4 @@ def cancel_order(
         }
     )
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

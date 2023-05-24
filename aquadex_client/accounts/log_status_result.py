@@ -1,7 +1,6 @@
 import typing
 from dataclasses import dataclass
-from base64 import b64decode
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
 import borsh_construct as borsh
@@ -24,32 +23,34 @@ class LogStatusResult:
     layout: typing.ClassVar = borsh.CStruct(
         "prev" / BorshPubkey, "next" / BorshPubkey, "items" / borsh.U32
     )
-    prev: PublicKey
-    next: PublicKey
+    prev: Pubkey
+    next: Pubkey
     items: int
 
     @classmethod
     async def fetch(
         cls,
         conn: AsyncClient,
-        address: PublicKey,
+        address: Pubkey,
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.Optional["LogStatusResult"]:
         resp = await conn.get_account_info(address, commitment=commitment)
-        info = resp["result"]["value"]
+        info = resp.value
         if info is None:
             return None
-        if info["owner"] != str(PROGRAM_ID):
+        if info.owner != program_id:
             raise ValueError("Account does not belong to this program")
-        bytes_data = b64decode(info["data"][0])
+        bytes_data = info.data
         return cls.decode(bytes_data)
 
     @classmethod
     async def fetch_multiple(
         cls,
         conn: AsyncClient,
-        addresses: list[PublicKey],
+        addresses: list[Pubkey],
         commitment: typing.Optional[Commitment] = None,
+        program_id: Pubkey = PROGRAM_ID,
     ) -> typing.List[typing.Optional["LogStatusResult"]]:
         infos = await get_multiple_accounts(conn, addresses, commitment=commitment)
         res: typing.List[typing.Optional["LogStatusResult"]] = []
@@ -57,7 +58,7 @@ class LogStatusResult:
             if info is None:
                 res.append(None)
                 continue
-            if info.account.owner != PROGRAM_ID:
+            if info.account.owner != program_id:
                 raise ValueError("Account does not belong to this program")
             res.append(cls.decode(info.account.data))
         return res
@@ -85,7 +86,7 @@ class LogStatusResult:
     @classmethod
     def from_json(cls, obj: LogStatusResultJSON) -> "LogStatusResult":
         return cls(
-            prev=PublicKey(obj["prev"]),
-            next=PublicKey(obj["next"]),
+            prev=Pubkey.from_string(obj["prev"]),
+            next=Pubkey.from_string(obj["next"]),
             items=obj["items"],
         )

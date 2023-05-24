@@ -1,24 +1,28 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.system_program import ID as SYS_PROGRAM_ID
+from solders.instruction import Instruction, AccountMeta
 from ..program_id import PROGRAM_ID
 
 
 class VaultDepositAccounts(typing.TypedDict):
-    market: PublicKey
-    state: PublicKey
-    admin: PublicKey
-    manager: PublicKey
-    owner: PublicKey
-    settle: PublicKey
-    settle_prev: PublicKey
-    settle_next: PublicKey
-    vault: PublicKey
-    system_program: PublicKey
+    market: Pubkey
+    state: Pubkey
+    admin: Pubkey
+    manager: Pubkey
+    owner: Pubkey
+    settle: Pubkey
+    settle_prev: Pubkey
+    settle_next: Pubkey
+    vault: Pubkey
 
 
-def vault_deposit(accounts: VaultDepositAccounts) -> TransactionInstruction:
+def vault_deposit(
+    accounts: VaultDepositAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["market"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["state"], is_signer=False, is_writable=True),
@@ -29,11 +33,11 @@ def vault_deposit(accounts: VaultDepositAccounts) -> TransactionInstruction:
         AccountMeta(pubkey=accounts["settle_prev"], is_signer=False, is_writable=True),
         AccountMeta(pubkey=accounts["settle_next"], is_signer=False, is_writable=True),
         AccountMeta(pubkey=accounts["vault"], is_signer=False, is_writable=True),
-        AccountMeta(
-            pubkey=accounts["system_program"], is_signer=False, is_writable=False
-        ),
+        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"\xe7\x96)q\xb4h\xa2x"
     encoded_args = b""
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

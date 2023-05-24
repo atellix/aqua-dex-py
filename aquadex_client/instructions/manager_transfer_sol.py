@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
 import borsh_construct as borsh
 from ..program_id import PROGRAM_ID
 
@@ -18,21 +18,26 @@ layout = borsh.CStruct(
 
 
 class ManagerTransferSolAccounts(typing.TypedDict):
-    market: PublicKey
-    state: PublicKey
-    admin: PublicKey
-    manager: PublicKey
+    market: Pubkey
+    state: Pubkey
+    admin: Pubkey
+    manager: Pubkey
 
 
 def manager_transfer_sol(
-    args: ManagerTransferSolArgs, accounts: ManagerTransferSolAccounts
-) -> TransactionInstruction:
+    args: ManagerTransferSolArgs,
+    accounts: ManagerTransferSolAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["market"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["state"], is_signer=False, is_writable=True),
         AccountMeta(pubkey=accounts["admin"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["manager"], is_signer=True, is_writable=True),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"^\xab\x02\xe4\xfb\xda!X"
     encoded_args = layout.build(
         {
@@ -42,4 +47,4 @@ def manager_transfer_sol(
         }
     )
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
 import borsh_construct as borsh
 from ..program_id import PROGRAM_ID
 
@@ -18,17 +18,20 @@ layout = borsh.CStruct(
 
 
 class ExpireOrderAccounts(typing.TypedDict):
-    market: PublicKey
-    state: PublicKey
-    user: PublicKey
-    orders: PublicKey
-    settle_a: PublicKey
-    settle_b: PublicKey
+    market: Pubkey
+    state: Pubkey
+    user: Pubkey
+    orders: Pubkey
+    settle_a: Pubkey
+    settle_b: Pubkey
 
 
 def expire_order(
-    args: ExpireOrderArgs, accounts: ExpireOrderAccounts
-) -> TransactionInstruction:
+    args: ExpireOrderArgs,
+    accounts: ExpireOrderAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["market"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["state"], is_signer=False, is_writable=True),
@@ -37,6 +40,8 @@ def expire_order(
         AccountMeta(pubkey=accounts["settle_a"], is_signer=False, is_writable=True),
         AccountMeta(pubkey=accounts["settle_b"], is_signer=False, is_writable=True),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"\xae\x1bU\xf7i\xf5\xdc\r"
     encoded_args = layout.build(
         {
@@ -46,4 +51,4 @@ def expire_order(
         }
     )
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

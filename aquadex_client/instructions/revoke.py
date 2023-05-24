@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
 import borsh_construct as borsh
 from ..program_id import PROGRAM_ID
 
@@ -15,15 +15,20 @@ layout = borsh.CStruct("inp_root_nonce" / borsh.U8, "inp_role" / borsh.U32)
 
 
 class RevokeAccounts(typing.TypedDict):
-    root_data: PublicKey
-    auth_data: PublicKey
-    program: PublicKey
-    program_data: PublicKey
-    program_admin: PublicKey
-    rbac_user: PublicKey
+    root_data: Pubkey
+    auth_data: Pubkey
+    program: Pubkey
+    program_data: Pubkey
+    program_admin: Pubkey
+    rbac_user: Pubkey
 
 
-def revoke(args: RevokeArgs, accounts: RevokeAccounts) -> TransactionInstruction:
+def revoke(
+    args: RevokeArgs,
+    accounts: RevokeAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["root_data"], is_signer=False, is_writable=False),
         AccountMeta(pubkey=accounts["auth_data"], is_signer=False, is_writable=True),
@@ -34,6 +39,8 @@ def revoke(args: RevokeArgs, accounts: RevokeAccounts) -> TransactionInstruction
         AccountMeta(pubkey=accounts["program_admin"], is_signer=True, is_writable=True),
         AccountMeta(pubkey=accounts["rbac_user"], is_signer=False, is_writable=False),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b'\xaa\x17\x1f"\x85\xad]\xf2'
     encoded_args = layout.build(
         {
@@ -42,4 +49,4 @@ def revoke(args: RevokeArgs, accounts: RevokeAccounts) -> TransactionInstruction
         }
     )
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)

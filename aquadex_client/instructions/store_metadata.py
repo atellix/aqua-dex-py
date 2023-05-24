@@ -1,7 +1,8 @@
 from __future__ import annotations
 import typing
-from solana.publickey import PublicKey
-from solana.transaction import TransactionInstruction, AccountMeta
+from solders.pubkey import Pubkey
+from solders.system_program import ID as SYS_PROGRAM_ID
+from solders.instruction import Instruction, AccountMeta
 import borsh_construct as borsh
 from ..program_id import PROGRAM_ID
 
@@ -24,16 +25,18 @@ layout = borsh.CStruct(
 
 
 class StoreMetadataAccounts(typing.TypedDict):
-    program: PublicKey
-    program_data: PublicKey
-    program_admin: PublicKey
-    program_info: PublicKey
-    system_program: PublicKey
+    program: Pubkey
+    program_data: Pubkey
+    program_admin: Pubkey
+    program_info: Pubkey
 
 
 def store_metadata(
-    args: StoreMetadataArgs, accounts: StoreMetadataAccounts
-) -> TransactionInstruction:
+    args: StoreMetadataArgs,
+    accounts: StoreMetadataAccounts,
+    program_id: Pubkey = PROGRAM_ID,
+    remaining_accounts: typing.Optional[typing.List[AccountMeta]] = None,
+) -> Instruction:
     keys: list[AccountMeta] = [
         AccountMeta(pubkey=accounts["program"], is_signer=False, is_writable=False),
         AccountMeta(
@@ -41,10 +44,10 @@ def store_metadata(
         ),
         AccountMeta(pubkey=accounts["program_admin"], is_signer=True, is_writable=True),
         AccountMeta(pubkey=accounts["program_info"], is_signer=False, is_writable=True),
-        AccountMeta(
-            pubkey=accounts["system_program"], is_signer=False, is_writable=False
-        ),
+        AccountMeta(pubkey=SYS_PROGRAM_ID, is_signer=False, is_writable=False),
     ]
+    if remaining_accounts is not None:
+        keys += remaining_accounts
     identifier = b"x\x8b\xc1\xec\xa7%\nI"
     encoded_args = layout.build(
         {
@@ -56,4 +59,4 @@ def store_metadata(
         }
     )
     data = identifier + encoded_args
-    return TransactionInstruction(keys, PROGRAM_ID, data)
+    return Instruction(program_id, data, keys)
