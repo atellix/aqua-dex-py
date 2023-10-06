@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import math
 import struct
 import base64
@@ -12,7 +13,7 @@ from solana.transaction import Transaction
 from solders.pubkey import Pubkey
 from anchorpy import Program, Context, Idl
 from anchorpy.program.common import translate_address
-from aquadex_client.accounts import Market, MarketState, UserVault
+from aquadex_client.accounts import Market, MarketState, UserVault, TradeResult
 from aquadex_client.instructions import limit_bid, limit_ask, market_bid, market_ask, cancel_order, withdraw as log_withdraw, vault_withdraw
 
 __all__ = ['AquadexClient']
@@ -396,7 +397,19 @@ class AquadexMarket(object):
         tx = Transaction(recent_blockhash=recent_blockhash)
         tx.add(ix)
         self.client.provider.wallet.sign_transaction(tx)
-        return await self.client.provider.send(tx)
+        sig = await self.client.provider.send(tx)
+        for i in range(10):
+            log = await self.client.fetch_transaction(sig)
+            if not(log):
+                await asyncio.sleep(0.5)
+                continue
+            return_data = base64.b64decode(json.loads(log.to_json())['result']['meta']['returnData']['data'][0])
+            return_data = TradeResult.discriminator + return_data
+            return_data = return_data + bytearray(56 - len(return_data))
+            return_data = TradeResult.decode(return_data).to_json()
+            return_data['order_id'] = encode_order_id(return_data['order_id'].to_bytes(16, 'little'))
+            return return_data
+        raise Exception('Transaction log not found for: {}'.format(sig))
 
     async def cancel_order(self, side, order_id):
         if side == 'bid':
@@ -447,11 +460,10 @@ class AquadexMarket(object):
         }
 
     async def has_withdraw(self):
-        # loop through settlement logs
         entries = []
         vault = False
         found = False
-        # TODO: Check user vault
+        # Check user vault
         user_pk = self.client.provider.wallet.public_key
         vault_account_id = program_address([bytes(Pubkey.from_string(self.market_id)), bytes(user_pk)], self.client.program_id)
         vault_resp = await self.client.fetch_user_vault(vault_account_id)
@@ -460,7 +472,6 @@ class AquadexMarket(object):
             if vault_data['mkt_tokens'] > 0 or vault_data['prc_tokens'] > 0:
                 vault = vault_account_id
                 found = True
-        print(vault)
         # Check settlement logs
         logs = await self.get_settlement_logs(user_wallet=self.client.provider.wallet.public_key)
         if len(logs['entries']) > 0:
