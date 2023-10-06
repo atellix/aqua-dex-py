@@ -25,7 +25,16 @@ async def main():
 
     # print orderbook
     print('Orderbook')
-    pprint.pprint(await market.orderbook())
+    book = await market.orderbook()
+    #pprint.pprint(book)
+
+    if True:
+        for order in book['asks']:
+            print('Ask ' + order['key'])
+            await market.cancel_order('ask', order['key'])
+        for order in book['bids']:
+            print('Bid ' + order['key'])
+            await market.cancel_order('ask', order['key'])
 
     # close socket
     await client.close()

@@ -7,6 +7,7 @@ import asyncio
 import krock32
 from decimal import Decimal
 from aquadex_client import program_id as client_program_id
+from solana.rpc import types
 from solana.transaction import Transaction
 from solders.pubkey import Pubkey
 from anchorpy import Program, Context, Idl
@@ -17,6 +18,7 @@ from aquadex_client.instructions import limit_bid, limit_ask, market_bid, market
 __all__ = ['AquadexClient']
 
 DEFAULT_AQUADEX_PROGRAM_ID = Pubkey.from_string('AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR')
+DEFAULT_OPTIONS = types.TxOpts(skip_confirmation=True, preflight_commitment='processed')
 
 SPL_TOKEN = Pubkey.from_string('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
 ASC_TOKEN = Pubkey.from_string('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
@@ -390,9 +392,7 @@ class AquadexMarket(object):
                 'inp_preview': order_rec.preview,
                 'inp_rollover': order_rec.rollover,
             }, self.market_accounts(), program_id=self.client.program_id)
-        recent_blockhash = (
-            await self.client.provider.connection.get_latest_blockhash('confirmed')
-        ).value.blockhash
+        recent_blockhash = (await self.client.provider.connection.get_latest_blockhash('confirmed')).value.blockhash
         tx = Transaction(recent_blockhash=recent_blockhash)
         tx.add(ix)
         self.client.provider.wallet.sign_transaction(tx)
@@ -409,9 +409,7 @@ class AquadexMarket(object):
             'inp_side': side_code,
             'inp_order_id': decode_order_id(order_id),
         }, self.market_accounts('cancel'), program_id=self.client.program_id)
-        recent_blockhash = (
-            await self.client.provider.connection.get_latest_blockhash('confirmed')
-        ).value.blockhash
+        recent_blockhash = (await self.client.provider.connection.get_latest_blockhash('confirmed')).value.blockhash
         tx = Transaction(recent_blockhash=recent_blockhash)
         tx.add(ix)
         self.client.provider.wallet.sign_transaction(tx)
@@ -489,10 +487,6 @@ class AquadexMarket(object):
                 vault_data = vault_resp.to_json()
                 if vault_data['mkt_tokens'] > 0 or vault_data['prc_tokens'] > 0:
                     vault = vault_account_id
-        recent_blockhash = (
-            await self.client.provider.connection.get_latest_blockhash('confirmed')
-        ).value.blockhash
-        tx = Transaction(recent_blockhash=recent_blockhash)
         market_data = self.client.market[self.market_id]
         market_state = self.client.market_state[market_data['state']]
         user_pk = self.client.provider.wallet.public_key
@@ -500,6 +494,7 @@ class AquadexMarket(object):
         prc_mint_pk = Pubkey.from_string(market_data['prc_mint'])
         user_mkt_token_id = associated_token(mkt_mint_pk, user_pk)
         user_prc_token_id = associated_token(prc_mint_pk, user_pk)
+        txres = []
         for entry in log_entries:
             ix = log_withdraw({
                 'market': Pubkey.from_string(self.market_id),
@@ -516,7 +511,11 @@ class AquadexMarket(object):
                 'result': user_pk,
                 'spl_token_prog': SPL_TOKEN,
             }, program_id=self.client.program_id)
+            recent_blockhash = (await self.client.provider.connection.get_latest_blockhash('confirmed')).value.blockhash
+            tx = Transaction(recent_blockhash=recent_blockhash)
             tx.add(ix)
+            self.client.provider.wallet.sign_transaction(tx)
+            txres.append(str(await self.client.provider.send(tx)))
         if vault:
             ix = vault_withdraw({
                 'market': Pubkey.from_string(self.market_id),
@@ -531,12 +530,12 @@ class AquadexMarket(object):
                 'prc_vault': Pubkey.from_string(market_data['prc_vault']),
                 'spl_token_prog': SPL_TOKEN,
             }, program_id=self.client.program_id)
+            recent_blockhash = (await self.client.provider.connection.get_latest_blockhash('confirmed')).value.blockhash
+            tx = Transaction(recent_blockhash=recent_blockhash)
             tx.add(ix)
-        if len(log_entries) > 0 or vault is not None:
             self.client.provider.wallet.sign_transaction(tx)
-            return await self.client.provider.send(tx)
-        else:
-            return None
+            txres.append(str(await self.client.provider.send(tx)))
+        return txres
 
 class AquadexClient(object):
     def __init__(self, async_client, provider, program_id=None, idl_file='idl/aqua_dex.json'):
@@ -573,6 +572,9 @@ class AquadexClient(object):
 
     async def fetch_user_vault(self, vault_account_id):
         return await UserVault.fetch(self.async_client, Pubkey.from_string(vault_account_id), program_id=self.program_id)
+
+    async def fetch_transaction(self, txid):
+        return await self.provider.connection.get_transaction(txid, commitment='confirmed')
 
     def decode_settlement_log(self, settle_data, user_wallet=None):
         outer_fmt = "<32s32s32sIH{}s".format(len(settle_data) - (32 + 32 + 32 + 4 + 2))
