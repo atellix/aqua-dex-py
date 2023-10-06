@@ -11,10 +11,10 @@ from solana.transaction import Transaction
 from solders.pubkey import Pubkey
 from anchorpy import Program, Context, Idl
 from anchorpy.program.common import translate_address
-from aquadex_client.accounts import Market, MarketState
+from aquadex_client.accounts import Market, MarketState, UserVault
 from aquadex_client.instructions import limit_bid, limit_ask, market_bid, market_ask, cancel_order, withdraw as log_withdraw, vault_withdraw
 
-__all__ = ['AquadexMarket', 'Market']
+__all__ = ['AquadexClient']
 
 DEFAULT_AQUADEX_PROGRAM_ID = Pubkey.from_string('AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR')
 
@@ -450,16 +450,45 @@ class AquadexMarket(object):
 
     async def has_withdraw(self):
         # loop through settlement logs
+        entries = []
+        vault = False
+        found = False
+        # TODO: Check user vault
+        user_pk = self.client.provider.wallet.public_key
+        vault_account_id = program_address([bytes(Pubkey.from_string(self.market_id)), bytes(user_pk)], self.client.program_id)
+        vault_resp = await self.client.fetch_user_vault(vault_account_id)
+        if vault_resp is not None:
+            vault_data = vault_resp.to_json()
+            if vault_data['mkt_tokens'] > 0 or vault_data['prc_tokens'] > 0:
+                vault = vault_account_id
+                found = True
+        print(vault)
+        # Check settlement logs
         logs = await self.get_settlement_logs(user_wallet=self.client.provider.wallet.public_key)
         if len(logs['entries']) > 0:
-            return logs['entries']
-        # TODO: check user vault
-        return None
+            found = True
+            entries = logs['entries']
+        if not(found):
+            return False
+        return {
+            'entries': entries,
+            'vault': vault,
+        }
 
-    async def withdraw(self, log_entries=None, vault=False):
+    async def withdraw(self, param={}):
+        log_entries = param.get('entries', None)
+        vault = param.get('vault', None)
         if log_entries is None:
             logs = await self.get_settlement_logs(user_wallet=self.client.provider.wallet.public_key)
             log_entries = logs['entries']
+        if vault is None:
+            user_pk = self.client.provider.wallet.public_key
+            vault_account_id = program_address([bytes(Pubkey.from_string(self.market_id)), bytes(user_pk)], self.client.program_id)
+            vault_resp = await self.client.fetch_user_vault(vault_account_id)
+            if vault_resp is not None:
+                vault_data = vault_resp.to_json()
+                if vault_data['mkt_tokens'] > 0 or vault_data['prc_tokens'] > 0:
+                    vault = vault_account_id
         recent_blockhash = (
             await self.client.provider.connection.get_latest_blockhash('confirmed')
         ).value.blockhash
@@ -472,7 +501,6 @@ class AquadexMarket(object):
         user_mkt_token_id = associated_token(mkt_mint_pk, user_pk)
         user_prc_token_id = associated_token(prc_mint_pk, user_pk)
         for entry in log_entries:
-            print('Withdraw from: ' + str(entry['log']))
             ix = log_withdraw({
                 'market': Pubkey.from_string(self.market_id),
                 'state': Pubkey.from_string(market_data['state']),
@@ -489,7 +517,22 @@ class AquadexMarket(object):
                 'spl_token_prog': SPL_TOKEN,
             }, program_id=self.client.program_id)
             tx.add(ix)
-        if len(log_entries) > 0:
+        if vault:
+            ix = vault_withdraw({
+                'market': Pubkey.from_string(self.market_id),
+                'state': Pubkey.from_string(market_data['state']),
+                'agent': Pubkey.from_string(market_data['agent']),
+                'owner': user_pk,
+                'result': user_pk,
+                'vault': Pubkey.from_string(vault),
+                'user_mkt_token': Pubkey.from_string(user_mkt_token_id),
+                'user_prc_token': Pubkey.from_string(user_prc_token_id),
+                'mkt_vault': Pubkey.from_string(market_data['mkt_vault']),
+                'prc_vault': Pubkey.from_string(market_data['prc_vault']),
+                'spl_token_prog': SPL_TOKEN,
+            }, program_id=self.client.program_id)
+            tx.add(ix)
+        if len(log_entries) > 0 or vault is not None:
             self.client.provider.wallet.sign_transaction(tx)
             return await self.client.provider.send(tx)
         else:
@@ -527,6 +570,9 @@ class AquadexClient(object):
 
     async def fetch_market_state(self, state_account_id):
         return await MarketState.fetch(self.async_client, Pubkey.from_string(state_account_id), program_id=self.program_id)
+
+    async def fetch_user_vault(self, vault_account_id):
+        return await UserVault.fetch(self.async_client, Pubkey.from_string(vault_account_id), program_id=self.program_id)
 
     def decode_settlement_log(self, settle_data, user_wallet=None):
         outer_fmt = "<32s32s32sIH{}s".format(len(settle_data) - (32 + 32 + 32 + 4 + 2))
