@@ -11,7 +11,7 @@ from aquadex_client import program_id as client_program_id
 from solana.rpc import types
 from solana.transaction import Transaction
 from solders.pubkey import Pubkey
-from anchorpy import Program, Context, Idl
+from anchorpy import Program, Context, Idl, EventParser
 from anchorpy.program.common import translate_address
 from aquadex_client.accounts import Market, MarketState, UserVault, TradeResult
 from aquadex_client.instructions import limit_bid, limit_ask, market_bid, market_ask, cancel_order, withdraw as log_withdraw, vault_withdraw
@@ -426,7 +426,18 @@ class AquadexMarket(object):
         tx = Transaction(recent_blockhash=recent_blockhash)
         tx.add(ix)
         self.client.provider.wallet.sign_transaction(tx)
-        return await self.client.provider.send(tx)
+        sig = await self.client.provider.send(tx)
+        program = get_program(self.client.program_id, self.client.provider, self.client.idl_file)
+        parser = EventParser(program.program_id, program.coder)
+        for i in range(10):
+            log = await self.client.fetch_transaction(sig)
+            if not(log):
+                await asyncio.sleep(0.5)
+                continue
+            meta = json.loads(log.to_json())['result']['meta']
+            evts = []
+            parser.parse_logs(meta['logMessages'], lambda evt: evts.append(evt))
+            return evts[0].data
 
     async def get_settlement_logs(self, user_wallet=None):
         log_data = {}
@@ -460,6 +471,7 @@ class AquadexMarket(object):
         }
 
     async def has_withdraw(self):
+        # Loop through settlement logs
         entries = []
         vault = False
         found = False
@@ -526,7 +538,19 @@ class AquadexMarket(object):
             tx = Transaction(recent_blockhash=recent_blockhash)
             tx.add(ix)
             self.client.provider.wallet.sign_transaction(tx)
-            txres.append(str(await self.client.provider.send(tx)))
+            sig = await self.client.provider.send(tx)
+            program = get_program(self.client.program_id, self.client.provider, self.client.idl_file)
+            parser = EventParser(program.program_id, program.coder)
+            for i in range(10):
+                log = await self.client.fetch_transaction(sig)
+                if not(log):
+                    await asyncio.sleep(0.5)
+                    continue
+                meta = json.loads(log.to_json())['result']['meta']
+                evts = []
+                parser.parse_logs(meta['logMessages'], lambda evt: evts.append(evt))
+                txres.append(evts[0].data)
+                break
         if vault:
             ix = vault_withdraw({
                 'market': Pubkey.from_string(self.market_id),
@@ -545,7 +569,19 @@ class AquadexMarket(object):
             tx = Transaction(recent_blockhash=recent_blockhash)
             tx.add(ix)
             self.client.provider.wallet.sign_transaction(tx)
-            txres.append(str(await self.client.provider.send(tx)))
+            sig = await self.client.provider.send(tx) 
+            program = get_program(self.client.program_id, self.client.provider, self.client.idl_file)
+            parser = EventParser(program.program_id, program.coder)
+            for i in range(10):
+                log = await self.client.fetch_transaction(sig)
+                if not(log):
+                    await asyncio.sleep(0.5)
+                    continue
+                meta = json.loads(log.to_json())['result']['meta']
+                evts = []
+                parser.parse_logs(meta['logMessages'], lambda evt: evts.append(evt))
+                txres.append(evts[0].data)
+                break
         return txres
 
 class AquadexClient(object):

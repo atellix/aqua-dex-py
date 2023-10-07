@@ -31,10 +31,10 @@ async def main():
     if True:
         for order in book['asks']:
             print('Ask ' + order['key'])
-            await market.cancel_order('ask', order['key'])
+            print(await market.cancel_order('ask', order['key']))
         for order in book['bids']:
             print('Bid ' + order['key'])
-            await market.cancel_order('ask', order['key'])
+            print(await market.cancel_order('ask', order['key']))
 
     # close socket
     await client.close()
